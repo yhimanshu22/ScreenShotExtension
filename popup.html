@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screenshot Taker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        #captureFull,
+        #captureSelected {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease-in-out;
+        }
+
+        img {
+            max-width: 100%;
+            margin-top: 10px;
+            display: none;
+            /* Hide initially */
+        }
+
+        #capture:hover {
+            background-color: #0056b3;
+        }
+
+        #screenshot {
+            display: none;
+            max-width: 100%;
+            margin-top: 10px;
+            border: 2px solid #000;
+        }
+    </style>
+    <script src="popup.js" defer></script>
+</head>
+
+<body>
+    <h3>Screenshot Taker</h3>
+    <button id="captureFull">Capture Full Page</button>
+    <button id="captureSelected">Capture Selected Area</button>
+    <img id="screenshot" alt="Screenshot Preview">
+</body>
+
+</html>
