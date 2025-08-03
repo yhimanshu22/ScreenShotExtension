@@ -1,81 +1,122 @@
-(async function () {
-    // Create a selection overlay
-    let selectionDiv = document.createElement("div");
-    selectionDiv.style.position = "fixed";
-    selectionDiv.style.zIndex = "10000";
-    selectionDiv.style.border = "2px dashed red";
-    selectionDiv.style.background = "rgba(255, 0, 0, 0.2)";
-    document.body.appendChild(selectionDiv);
 
-    let startX, startY, endX, endY;
+
+// This function is wrapped in an IIFE (Immediately Invoked Function Expression)
+// to prevent polluting the global scope and to run immediately.
+(function () {
+    // Prevent the script from running multiple times
+    if (window.isScreenshotSelectorActive) return;
+    window.isScreenshotSelectorActive = true;
+
+    // --- Create UI Elements ---
+
+    // 1. A semi-transparent overlay to darken the page
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.4); z-index: 9999; cursor: crosshair;
+  `;
+
+    // 2. The selection box that the user will draw
+    const selectionDiv = document.createElement('div');
+    selectionDiv.style.cssText = `
+    position: fixed; z-index: 10000; border: 2px dashed #007aff;
+    background: rgba(0, 123, 255, 0.2); pointer-events: none;
+  `;
+
+    // 3. An instruction message
+    const instructions = document.createElement('div');
+    instructions.textContent = "Click and drag to select. Press ESC to cancel.";
+    instructions.style.cssText = `
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: #333; color: white; padding: 10px 20px; border-radius: 5px;
+    z-index: 10001; font-family: sans-serif; font-size: 14px;
+  `;
+
+    // Add the overlay and instructions to the page
+    document.body.appendChild(overlay);
+    document.body.appendChild(instructions);
+
+    // --- State Variables ---
+    let startX, startY;
     let isSelecting = false;
 
-    document.addEventListener("mousedown", (e) => {
+    // --- Event Handlers ---
+
+    // Start selection on mousedown
+    overlay.addEventListener('mousedown', e => {
+        e.preventDefault();
         isSelecting = true;
         startX = e.clientX;
         startY = e.clientY;
+
+        // Position the selection box at the starting point
         selectionDiv.style.left = `${startX}px`;
         selectionDiv.style.top = `${startY}px`;
-        selectionDiv.style.width = "0px";
-        selectionDiv.style.height = "0px";
+        selectionDiv.style.width = '0px';
+        selectionDiv.style.height = '0px';
+        document.body.appendChild(selectionDiv);
     });
 
-    document.addEventListener("mousemove", (e) => {
+    // Update selection box on mousemove
+    document.addEventListener('mousemove', e => {
         if (!isSelecting) return;
-        endX = e.clientX;
-        endY = e.clientY;
-        selectionDiv.style.width = `${Math.abs(endX - startX)}px`;
-        selectionDiv.style.height = `${Math.abs(endY - startY)}px`;
-        selectionDiv.style.left = `${Math.min(startX, endX)}px`;
-        selectionDiv.style.top = `${Math.min(startY, endY)}px`;
+        e.preventDefault();
+
+        // Calculate the dimensions and position of the selection box
+        const currentX = e.clientX;
+        const currentY = e.clientY;
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+        const left = Math.min(startX, currentX);
+        const top = Math.min(startY, currentY);
+
+        // Apply the new dimensions and position
+        selectionDiv.style.width = `${width}px`;
+        selectionDiv.style.height = `${height}px`;
+        selectionDiv.style.left = `${left}px`;
+        selectionDiv.style.top = `${top}px`;
     });
 
-    document.addEventListener("mouseup", async () => {
+    // Finalize selection on mouseup
+    overlay.addEventListener('mouseup', e => {
+        if (!isSelecting) return;
+        e.preventDefault();
         isSelecting = false;
-        document.body.removeChild(selectionDiv);
 
-        // Send message to background.js with selection coordinates
-        console.log('sending message from content');
-        chrome.runtime.sendMessage({
+        const rect = selectionDiv.getBoundingClientRect();
 
-            action: "capture_selected",
-            coords: {
-                x: Math.min(startX, endX),
-                y: Math.min(startY, endY),
-                width: Math.abs(endX - startX),
-                height: Math.abs(endY - startY)
-            }
-        });
+        // Only capture if the selection is a meaningful size
+        if (rect.width > 10 && rect.height > 10) {
+            // Send the coordinates to the background script
+            chrome.runtime.sendMessage({
+                action: "capture_selected",
+                coords: {
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                    devicePixelRatio: window.devicePixelRatio
+                }
+            });
+        }
+        // Clean up all UI elements
+        cleanup();
     });
-})();
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "crop_image") {
-        let img = new window.Image();
-        img.src = message.image;
-        img.onload = () => {
-            let canvas = document.createElement("canvas");
-            let ctx = canvas.getContext("2d");
-
-            canvas.width = message.coords.width;
-            canvas.height = message.coords.height;
-
-            ctx.drawImage(
-                img,
-                message.coords.x,
-                message.coords.y,
-                message.coords.width,
-                message.coords.height,
-                0, 0,
-                message.coords.width,
-                message.coords.height
-            );
-
-            let croppedImage = canvas.toDataURL("image/png");
-
-            // Send cropped image back to popup.js
-            chrome.runtime.sendMessage({ success: true, image: croppedImage });
-        };
+    // Handle cancellation with the Escape key
+    function handleKeydown(e) {
+        if (e.key === "Escape") {
+            cleanup();
+        }
     }
-});
+    document.addEventListener('keydown', handleKeydown);
 
+    // --- Cleanup Function ---
+    function cleanup() {
+        window.isScreenshotSelectorActive = false;
+        document.removeEventListener('keydown', handleKeydown);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        if (selectionDiv.parentNode) selectionDiv.parentNode.removeChild(selectionDiv);
+        if (instructions.parentNode) instructions.parentNode.removeChild(instructions);
+    }
+})();
