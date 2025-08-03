@@ -1,6 +1,6 @@
 const OFFSCREEN_DOCUMENT_PATH = '/offscreen.html';
 
-// Listen for messages from content script, popup, or offscreen document
+// Listen for messages from content script or offscreen document
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     // 1. Message from content script with coordinates to start the process
     if (message.action === "capture_selected") {
@@ -15,25 +15,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         } catch (error) {
             console.error("Failed to capture tab. It might be a protected page (e.g., chrome://).", error);
         }
-    }
-
-    // --- NEW: Handle full-page capture request from the popup ---
-    if (message.action === "capture_full_page") {
-        try {
-            const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "png" });
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            // Inject the copy function directly, since no cropping is needed
-            chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: copyImageToClipboard,
-                args: [dataUrl]
-            });
-            sendResponse({ success: true });
-        } catch (error) {
-            console.error("Failed to capture full page. It might be a protected page.", error);
-            sendResponse({ success: false, error: error.message });
-        }
-        return true; // Keep message channel open for async response
     }
 
     // 2. Message from offscreen document with the final cropped image
